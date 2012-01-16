@@ -23,6 +23,7 @@ import org.jboss.arquillian.container.spi.client.container.DeploymentException;
 import org.jboss.arquillian.container.spi.client.container.LifecycleException;
 import org.jboss.arquillian.container.spi.client.protocol.ProtocolDescription;
 import org.jboss.arquillian.container.spi.client.protocol.metadata.ProtocolMetaData;
+import org.jboss.arquillian.container.wls.jsr88_12c.clientutils.Jsr88ClientService;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.descriptor.api.Descriptor;
 
@@ -36,6 +37,7 @@ public class WebLogicContainer implements DeployableContainer<WebLogicConfigurat
 {
    
    WebLogicConfiguration configuration;
+   private Jsr88ClientService service;
 
    public Class<WebLogicConfiguration> getConfigurationClass()
    {
@@ -49,12 +51,13 @@ public class WebLogicContainer implements DeployableContainer<WebLogicConfigurat
 
    public void start() throws LifecycleException
    {
-      //no-op
+      service = new Jsr88ClientService(configuration);
+      service.startUp();
    }
 
    public void stop() throws LifecycleException
    {
-      //no-op
+      service.shutDown();
    }
 
    public ProtocolDescription getDefaultProtocol()
@@ -68,26 +71,28 @@ public class WebLogicContainer implements DeployableContainer<WebLogicConfigurat
    public ProtocolMetaData deploy(Archive<?> archive) throws DeploymentException
    {
       String deploymentName = getDeploymentName(archive);
-      File deploymentArchive = ShrinkWrapUtil.toFile(archive);
+      // File deploymentArchive = ShrinkWrapUtil.toFile(archive);
       
-      // Deploy the application.
-      WebLogicDeployerClient deployerClient = new WebLogicDeployerClient(configuration);
-      deployerClient.deploy(deploymentName, deploymentArchive);
+      service.doDeploy(archive);
+      // WebLogicDeployerClient deployerClient = new WebLogicDeployerClient(configuration);
+      // deployerClient.deploy(deploymentName, deploymentArchive);
       
       // Fetch the details from the Domain Runtime MBean Server.
       WebLogicJMXClient weblogicClient = new WebLogicJMXClient(configuration);
-      ProtocolMetaData metadata = weblogicClient.deploy(deploymentName);
+      ProtocolMetaData metadata = weblogicClient.deploy(archive.getName());
       return metadata;
    }
 
    public void undeploy(Archive<?> archive) throws DeploymentException
    {
       // Undeploy the application
-      String deploymentName = getDeploymentName(archive);
-      WebLogicDeployerClient deployerClient = new WebLogicDeployerClient(configuration);
-      deployerClient.undeploy(deploymentName);
+      service.doUndeploy(archive);
+      // String deploymentName = getDeploymentName(archive);
+      // WebLogicDeployerClient deployerClient = new WebLogicDeployerClient(configuration);
+      // deployerClient.undeploy(deploymentName);
       
       // Verify the undeployment from the Domain Runtime MBean Server.
+      String deploymentName = getDeploymentName(archive);
       WebLogicJMXClient weblogicClient = new WebLogicJMXClient(configuration);
       weblogicClient.undeploy(deploymentName);
    }

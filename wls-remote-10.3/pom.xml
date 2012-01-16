@@ -10,8 +10,10 @@
     <name>Arquillian Container WebLogic Remote 10.3</name>
     <properties>
         <servlet.api.version>2.5.0.GA</servlet.api.version>
+        <version.jsr88>1.2-rev-1</version.jsr88>
         <ejb.api.version>3.0.0.GA</ejb.api.version>
         <cdi.api.version>1.0-SP1</cdi.api.version>
+        <version.weblogic>10.3</version.weblogic>
     </properties>
     <dependencies>
         <dependency>
@@ -53,6 +55,19 @@
             <groupId>org.jboss.javaee</groupId>
             <artifactId>jboss-ejb-api</artifactId>
             <version>${ejb.api.version}</version>
+        </dependency>
+        
+        <dependency>
+          <groupId>javax.enterprise.deploy</groupId>
+          <artifactId>deployment-api</artifactId>
+          <version>${version.jsr88}</version>
+        </dependency>
+        
+        <dependency>
+           <groupId>com.oracle.weblogic</groupId>
+           <artifactId>wlfullclient</artifactId>
+           <version>${version.weblogic}</version>
+           <scope>compile</scope>
         </dependency>
         
         <!-- CDI support -->

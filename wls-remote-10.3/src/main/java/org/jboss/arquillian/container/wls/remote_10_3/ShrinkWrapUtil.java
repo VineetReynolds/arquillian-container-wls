@@ -31,7 +31,7 @@ import org.jboss.shrinkwrap.descriptor.api.Descriptor;
  * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * @version $Revision: $
  */
-final class ShrinkWrapUtil
+public final class ShrinkWrapUtil
 {
    private ShrinkWrapUtil() { }
 
