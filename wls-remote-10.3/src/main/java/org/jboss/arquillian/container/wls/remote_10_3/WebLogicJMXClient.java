@@ -37,6 +37,7 @@ import javax.management.remote.JMXServiceURL;
 import javax.naming.Context;
 
 import org.jboss.arquillian.container.spi.client.container.DeploymentException;
+import org.jboss.arquillian.container.spi.client.container.LifecycleException;
 import org.jboss.arquillian.container.spi.client.protocol.metadata.HTTPContext;
 import org.jboss.arquillian.container.spi.client.protocol.metadata.ProtocolMetaData;
 import org.jboss.arquillian.container.spi.client.protocol.metadata.Servlet;
@@ -267,8 +268,10 @@ public class WebLogicJMXClient
    private JMXConnector connector;
    
    private ObjectName domainRuntimeService;
+
+   private ClassLoader jmxLibraryClassLoader;
    
-   public WebLogicJMXClient(WebLogicConfiguration configuration)
+   public WebLogicJMXClient(WebLogicConfiguration configuration) throws LifecycleException
    {
       this.configuration = configuration;
       try
@@ -280,6 +283,14 @@ public class WebLogicJMXClient
          // We're pretty much in trouble now. The constructed object will be useless.
          throw new IllegalStateException(objectNameEx);
       }
+      
+      // Store the initial state pre-invocation.
+      stashInitialState();
+      // Now, create a connection to the Domain Runtime MBean Server.
+      initWebLogicJMXLibClassLoader();
+      createConnection();
+      // Reset the state. Allows tests to rely on the original Thread context classloader and System properties. 
+      revertToInitialState();
    }
 
    /**
@@ -295,8 +306,7 @@ public class WebLogicJMXClient
       {
          // Store the initial state pre-invocation.
          stashInitialState();
-         // Now, create a connection to the Domain Runtime MBean Server.
-         createConnection();
+         setupState();
 
          try
          {
@@ -314,8 +324,6 @@ public class WebLogicJMXClient
       }
       finally
       {
-         // Close the connection first.
-         closeConnection();
          // Reset the state. 
          revertToInitialState();
       }
@@ -334,8 +342,7 @@ public class WebLogicJMXClient
       {
          // Store the initial state pre-invocation.
          stashInitialState();
-         // Now, create a connection to the Domain Runtime MBean Server.
-         createConnection();
+         setupState();
          
          try
          {
@@ -348,11 +355,19 @@ public class WebLogicJMXClient
       }
       finally
       {
-         // Close the connection first.
-         closeConnection();
          // Reset the state.
          revertToInitialState();
       }
+   }
+   
+   public void close() throws LifecycleException
+   {
+      stashInitialState();
+      setupState();
+      
+      closeConnection();
+      
+      revertToInitialState();
    }
 
    /**
@@ -430,7 +445,7 @@ public class WebLogicJMXClient
       try
       {
          URL[] urls = { wlHome.toURI().toURL() };
-         ClassLoader jmxLibraryClassLoader = new WebLogicJMXLibClassLoader(urls, Thread.currentThread().getContextClassLoader());
+         jmxLibraryClassLoader = new WebLogicJMXLibClassLoader(urls, Thread.currentThread().getContextClassLoader());
          Thread.currentThread().setContextClassLoader(jmxLibraryClassLoader);
       }
       catch (MalformedURLException urlEx)
@@ -444,7 +459,7 @@ public class WebLogicJMXClient
     * 
     * @throws DeploymentException When a connection to the Domain Runtime MBean Server could not be established.
     */
-   private void createConnection() throws DeploymentException
+   private void createConnection() throws LifecycleException
    {
       if(connection != null)
       {
@@ -456,18 +471,6 @@ public class WebLogicJMXClient
       String hostname = configuration.getJmxHost();
       int portNum = configuration.getJmxPort();
       String domainRuntimeMBeanServerURL = "/jndi/weblogic.management.mbeanservers.domainruntime";
-      if(configuration.isUseDemoTrust() || configuration.isUseCustomTrust() || configuration.isUseJavaStandardTrust())
-      {
-         System.setProperty("javax.net.ssl.trustStore", configuration.getTrustStoreLocation());
-         String trustStorePassword = configuration.getTrustStorePassword();
-         // The default password for JKS truststores 
-         // usually need not be specified to read the CA certs.
-         // But, if this was specified in arquillian.xml, we'll set it.
-         if(trustStorePassword != null && !trustStorePassword.equals(""))
-         {
-            System.setProperty("javax.net.ssl.trustStorePassword", trustStorePassword); 
-         }
-      }
 
       try
       {
@@ -481,14 +484,15 @@ public class WebLogicJMXClient
       }
       catch (IOException ioEx)
       {
-         throw new DeploymentException("Failed to obtain a connection to the MBean Server.", ioEx);
+         throw new LifecycleException("Failed to obtain a connection to the MBean Server.", ioEx);
       }
    }
    
    /**
     * Closes the connection to the Domain Runtime MBean Server.
+    * @throws LifecycleException 
     */
-   private void closeConnection()
+   private void closeConnection() throws LifecycleException
    {
       try
       {
@@ -499,7 +503,7 @@ public class WebLogicJMXClient
       }
       catch (IOException ioEx)
       {
-         logger.log(Level.INFO, "Failed to close the connection to the MBean Server.", ioEx);
+         throw new LifecycleException("Failed to close the connection to the MBean Server.", ioEx);
       }
    }
    
@@ -545,6 +549,23 @@ public class WebLogicJMXClient
       {
          Thread.currentThread().setContextClassLoader(originalContextClassLoader.get());
          originalContextClassLoader.set(null);
+      }
+   }
+   
+   private void setupState()
+   {
+      Thread.currentThread().setContextClassLoader(jmxLibraryClassLoader);
+      if(configuration.isUseDemoTrust() || configuration.isUseCustomTrust() || configuration.isUseJavaStandardTrust())
+      {
+         System.setProperty("javax.net.ssl.trustStore", configuration.getTrustStoreLocation());
+         String trustStorePassword = configuration.getTrustStorePassword();
+         // The default password for JKS truststores 
+         // usually need not be specified to read the CA certs.
+         // But, if this was specified in arquillian.xml, we'll set it.
+         if(trustStorePassword != null && !trustStorePassword.equals(""))
+         {
+            System.setProperty("javax.net.ssl.trustStorePassword", trustStorePassword); 
+         }
       }
    }
 
